@@ -17,8 +17,11 @@ public:
 	SubProgramBlock(std::istream &in, std::string _type, int _indent = 1);
 	~SubProgramBlock(void);
 
+	std::map<std::string,std::string> GetDeclaredUniforms(void) const;
+
 	std::string Run(void);
 	std::string toString(void) const;
+	std::string toString(std::map<std::string,std::string> declaredUniforms) const;
 
 protected:
 	std::string type;

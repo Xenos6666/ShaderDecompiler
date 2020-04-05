@@ -76,7 +76,7 @@ std::string PassBlock::ProgramRoutine(std::string programType) {
 	std::string keywordregstr = string("\"([A-Z0-9_]+)\"");
 	std::regex keywordreg = regex(keywordregstr);
 
-	std::string ptyperegstr = string("^\\s*\"!![a-z0-9_]+$");
+	std::string ptyperegstr = string("^\\s*\"(!!)?[a-z0-9_]+$");
 	std::regex ptypereg = regex(ptyperegstr);
 
 	std::smatch match;
@@ -239,7 +239,7 @@ outofloop:
 
 	for (auto prag : variants)
 	{
-		ret += "#pragma multi_compile";
+		ret += "#pragma multi_compile_local";
 		for (auto var : prag)
 		{
 			ret += " ";
@@ -268,16 +268,33 @@ outofloop:
 	{
 		ret += "\n#if 1";
 		string keys = frag.first;
-		for (auto key : fragkeywords)
+		auto vert = vertSubs.find(keys);
+		if (vert != vertSubs.end())
 		{
-			if (keys.find(" " + key.first + " ") == keys.npos)
-				ret += " && !defined (" + key.first + ")";
-			else
-				ret += " && defined (" + key.first + ")";
+			for (auto key : fragkeywords)
+			{
+				if (keys.find(" " + key.first + " ") == keys.npos)
+					ret += " && !defined (" + key.first + ")";
+				else
+					ret += " && defined (" + key.first + ")";
+			}
+			ret += "\n\n";
+			ret += frag.second->toString(vert->second->GetDeclaredUniforms());
+			ret += "\n#endif\n";
 		}
-		ret += "\n\n";
-		ret += frag.second->toString();
-		ret += "\n#endif\n";
+		else
+		{
+			for (auto key : fragkeywords)
+			{
+				if (keys.find(" " + key.first + " ") == keys.npos)
+					ret += " && !defined (" + key.first + ")";
+				else
+					ret += " && defined (" + key.first + ")";
+			}
+			ret += "\n\n";
+			ret += frag.second->toString();
+			ret += "\n#endif\n";
+		}
 	}
 	ret += std::string(indent, '\t') + "ENDCG\n";
 	return ret;
