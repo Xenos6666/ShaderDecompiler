@@ -14,3 +14,9 @@ git clone https://github.com/Xenos6666/ShaderDecompiler.git
 cd ShaderDecompiler 
 make
 ```
+
+## Usage
+
+```sh
+./shaderReconstructor <inputFile> <outputFile>
+```
