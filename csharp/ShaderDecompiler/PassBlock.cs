@@ -50,14 +50,10 @@ namespace ShaderDecompiler
 
         internal string Run()
         {
-            string regstr;
-            Regex reg;
-            Match match;
-
             string line = "";
 
-            regstr = "^\t{" + _indent + "}Program \"([a-z]+)\" \\{$";
-            reg = new Regex(regstr);
+            var regstr = "^\t{" + _indent + "}Program \"([a-z]+)\" \\{$";
+            var reg = new Regex(regstr);
 
             string stregstr = "^\t{" + _indent + "}Stencil \\{$";
             Regex streg = new Regex(stregstr);
@@ -67,7 +63,7 @@ namespace ShaderDecompiler
             {
                 if (line.Contains('{') && !line.Contains('}'))
                 {
-                    match = reg.Match(line);
+                    var match = reg.Match(line);
                     if (match.Success)
                     {
                         string lastline = ProgramRoutine(match.Groups[1].Value);

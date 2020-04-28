@@ -7,59 +7,48 @@ namespace ShaderDecompiler
     internal class ShaderBlock : BlockParser
     {
         private StreamReader _in;
-		private new int _indent;
+		const int _indent = 1;
 
-        public ShaderBlock(StreamReader _in, int indent = 1) : base(_in, indent)
+        string src_blend = string.Empty;
+        string dst_blend = string.Empty;
+        string cull = string.Empty;
+
+		public ShaderBlock(StreamReader _in) : base(_in, _indent)
         {
             this._in = _in;
-			this._indent = indent;
         }
 
-        ~ShaderBlock()
+        private static readonly string _startRunRegexStr = "^\\t{" + _indent + "}Properties \\{$";
+        private static readonly Regex _startRunRegex = new Regex(_startRunRegexStr);
+        private static readonly string _loopRunRegexStr = "^\t{" + _indent + "}SubShader \\{$";
+		private static readonly Regex _loopRunRegex = new Regex(_loopRunRegexStr);
+        private static readonly string fallRunRegexStr = "^\\s*Fallback \".*\"$";
+        private static readonly Regex _fallRunRegex = new Regex(fallRunRegexStr);
+		private static readonly string _editRunRegexStr = "^\\s*CustomEditor \".*\"$";
+		private static readonly Regex _editRunRegex = new Regex(_editRunRegexStr);
+
+		public string Run()
         {
+            GetLine(_in, out var line);
 
-        }
-
-        public string Run()
-        {
-			string regstr;
-			Regex reg;
-			Match match;
-
-			string line = "";
-
-			GetLine(_in, out line);
-
-			regstr = "^\\t{" + _indent.ToString() + "}Properties \\{$";
-			reg = new Regex(regstr);
-			LineMatch(line, out match, reg, regstr);
+			LineMatch(line, out _, _startRunRegex, _startRunRegexStr);
 			content.Add(new Line(line));
 
 			string lastline = PropertiesRoutine();
 			content.Add(new Line(lastline));
 
-			regstr = "^\t{" + _indent.ToString() + "}SubShader \\{$";
-			reg = new Regex(regstr);
-
-			string fallregstr = "^\\s*Fallback \".*\"$";
-			Regex fallreg = new Regex(fallregstr);
-
-			string editregstr = "^\\s*CustomEditor \".*\"$";
-			Regex editreg = new Regex(editregstr);
-
 			GetLine(_in, out line);
 			while (line.Contains('{') || !line.Contains('}'))
 			{
-				var match1 = fallreg.Match(line);
-				var match2 = editreg.Match(line);
-				if (match1.Success || match2.Success)
+				if (_fallRunRegex.IsMatch(line) || _editRunRegex.IsMatch(line))
 				{
 					content.Add(new Line(line));
 
 					GetLine(_in, out line);
 					continue;
 				}
-				LineMatch(line, out match, reg, regstr);
+
+				LineMatch(line, out _, _loopRunRegex, _loopRunRegexStr);
 				content.Add(new Line(line));
 
 				lastline = SubShaderRoutine();
@@ -71,27 +60,19 @@ namespace ShaderDecompiler
 			return line;
 		}
 
-        string SubShaderRoutine()
+        private static readonly string _passSubRegexStr = "^\t{" + (_indent + 1) + "}Pass \\{$";
+		private static readonly Regex _passSubRegex = new Regex(_passSubRegexStr);
+        private static readonly string _grabSubRegexStr = "^\t{" + (_indent + 1).ToString() + "}GrabPass \\{$";
+		private static readonly Regex _grabSubRegex = new Regex(_grabSubRegexStr);
+
+		string SubShaderRoutine()
         {
-			string regstr;
-			Regex reg;
-			Match match;
-
-			string line = "";
-
-			regstr = "^\t{" + (_indent + 1).ToString() + "}Pass \\{$";
-			reg = new Regex(regstr);
-
-			string grabregstr = "^\t{" + (_indent + 1).ToString() + "}GrabPass \\{$";
-			Regex grabreg = new Regex(grabregstr);
-
-			GetLine(_in, out line);
+			GetLine(_in, out var line);
 			while (line.Contains('{') || !line.Contains('}'))
 			{
 				content.Add(new Line(line));
 
-				match = reg.Match(line);
-				if (match.Success)
+				if (_passSubRegex.IsMatch(line))
 				{
 					PassBlock newBlock = new PassBlock(_in, _indent + 2);
 					newBlock.Blend(src_blend, dst_blend);
@@ -102,8 +83,7 @@ namespace ShaderDecompiler
 				}
 				else
 				{
-					match = grabreg.Match(line);
-					if (match.Success)
+					if (_grabSubRegex.IsMatch(line))
 					{
 						BlockParser newBlock = new BlockParser(_in, _indent + 2);
 						line = newBlock.Run();
@@ -117,40 +97,31 @@ namespace ShaderDecompiler
 			return line;
 		}
 
+        private const string _loopPropRegexStr = "^.*(_(Src|Dst)Blend(Float)?|_Cull).*$";
+		private static readonly Regex _loopPropRegex = new Regex(_loopPropRegexStr);
+
         string PropertiesRoutine()
         {
-			string regstr;
-			Regex reg;
-			Match match;
+            GetLine(_in, out var line);
+            while (line.Contains('{') || !line.Contains('}'))
+            {
+                content.Add(new Line(line));
 
-			string line = "";
+                var match = _loopPropRegex.Match(line);
+                if (match.Success)
+                {
+                    if (match.Groups[1].Value.Contains("SrcBlend"))
+                        src_blend = match.Groups[1].Value;
+                    if (match.Groups[1].Value.Contains("DstBlend"))
+                        dst_blend = match.Groups[1].Value;
+                    if (match.Groups[1].Value == "_Cull")
+                        cull = match.Groups[1].Value;
+                }
 
-			regstr = "^.*(_(Src|Dst)Blend(Float)?|_Cull).*$";
-			reg = new Regex(regstr);
+                GetLine(_in, out line);
+            }
 
-			GetLine(_in, out line);
-			while (line.Contains('{') || !line.Contains('}'))
-			{
-				content.Add(new Line(line));
-
-				match = reg.Match(line);
-				if (match.Success)
-				{
-					if (((string)match.Groups[1].Value).Contains("SrcBlend"))
-						src_blend = match.Groups[1].Value;
-					if (((string)match.Groups[1].Value).Contains("DstBlend"))
-						dst_blend = match.Groups[1].Value;
-					if (match.Groups[1].Value == "_Cull")
-						cull = match.Groups[1].Value;
-				}
-
-				GetLine(_in, out line);
-			}
-			return line;
-		}
-
-        string src_blend = string.Empty;
-        string dst_blend = string.Empty;
-        string cull = string.Empty;
+            return line;
+        }
     }
 }
