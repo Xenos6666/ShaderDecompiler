@@ -40,6 +40,15 @@ namespace ShaderDecompiler
             }
         }
 
+        public void LineMatch(string input, out Match match, string expectedstr)
+        {
+            match = Regex.Match(input, expectedstr);
+            if (!match.Success)
+            {
+                throw new System.Exception($"line does not match expected format \nLine \"{input}\"\nExpected: \"{expectedstr}\"");
+            }
+        }
+
         public void GetLineMatch(StreamReader input, out Match match, Regex regex, string expectedstr)
         {
             GetLine(input, out string line);
