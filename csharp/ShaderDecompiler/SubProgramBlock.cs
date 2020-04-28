@@ -127,16 +127,12 @@ namespace ShaderDecompiler
             return line;
         }
 
+        private static readonly string _layoutProcSingleRegexStr =
+            "^\\s*(layout\\(location = \\d\\)\\s+)?(uniform\\s+)?([a-zA-Z0-9_]+\\s+([a-zA-Z0-9_]+)(\\[.+\\])?;)$";
+        private static readonly Regex _layoutProcSingleRegex = new Regex(_layoutProcSingleRegexStr);
         protected void ProcessSingleGlobal(string line)
         {
-            string regstr;
-            Regex reg;
-            Match match;
-
-            regstr = "^\\s*(layout\\(location = \\d\\)\\s+)?(uniform\\s+)?([a-zA-Z0-9_]+\\s+([a-zA-Z0-9_]+)(\\[.+\\])?;)$";
-            reg = new Regex(regstr);
-
-            LineMatch(line, out match, reg, regstr);
+            LineMatch(line, out var match, _layoutProcSingleRegex, _layoutProcSingleRegexStr);
             string tmp = "";
             if (match.Groups[2].Value == "")
             {
@@ -152,20 +148,19 @@ namespace ShaderDecompiler
                 uniforms.Add(match.Groups[4].Value,tmp);
         }
 
+        private static readonly string _procSingleInRegexStr =
+            "^\\s*(layout\\(location = \\d\\)\\s+)?(in\\s+)([a-zA-Z0-9_]+\\s+(in_|vs_)(POSITION|NORMAL|[a-zA-Z0-9_]+)\\d*);$";
+        private static readonly Regex _procSingleInRegex = new Regex(_procSingleInRegexStr);
         protected void ProcessSingleInput(string line)
         {
-            string regstr;
-            Regex reg;
-            Match match;
+            LineMatch(line, out _, _procSingleInRegex, _procSingleInRegexStr);
 
-            regstr = "^\\s*(layout\\(location = \\d\\)\\s+)?(in\\s+)([a-zA-Z0-9_]+\\s+(in_|vs_)(POSITION|NORMAL|[a-zA-Z0-9_]+)\\d*);$";
-            reg = new Regex(regstr);
-
-            LineMatch(line, out match, reg, regstr);
-
-            string tmp = reg.Replace(line, "$3 : $5;");
+            string tmp = _procSingleInRegex.Replace(line, "$3 : $5;");
             input.Add(tmp);
         }
+
+        private static readonly string _procSingleOutRegexStr = "^(\\s*)(layout\\(location = \\d\\)\\s+)?(flat\\s+)?(out\\s+)([a-zA-Z0-9_]+\\s+(vs_)?([a-zA-Z0-9_]+));$";
+        private static readonly Regex _procSingleOutRegex = new Regex(_procSingleOutRegexStr);
 
         protected void ProcessSingleOutput(string line)
         {
@@ -174,20 +169,16 @@ namespace ShaderDecompiler
             Match match;
 
             regstr = "^(\\s*)(flat out\\s+)([a-z0-9_]+\\s+vs_SV_InstanceID\\d*);$";
-            reg = new Regex(regstr);
 
-            if (reg.IsMatch(line))
+            if (Regex.IsMatch(line, regstr))
             {
                 input.Add("UNITY_VERTEX_INPUT_INSTANCE_ID");
                 instancing = true;
                 return;
             }
 
-            regstr = "^(\\s*)(layout\\(location = \\d\\)\\s+)?(flat\\s+)?(out\\s+)([a-zA-Z0-9_]+\\s+(vs_)?([a-zA-Z0-9_]+));$";
-            reg = new Regex(regstr);
-
-            LineMatch(line, out match, reg, regstr);
-            string tmp = reg.Replace(line, "$5 : $7;");
+            LineMatch(line, out match, _procSingleOutRegex, _procSingleOutRegexStr);
+            string tmp = _procSingleOutRegex.Replace(line, "$5 : $7;");
             output.Add(tmp);
         }
 
@@ -198,9 +189,8 @@ namespace ShaderDecompiler
             Match match;
 
             regstr = "^(\\s*)[a-z0-9_]+\\s+u_xlat[a-z0-9_]*;$";
-            reg = new Regex(regstr);
 
-            LineMatch(line, out match, reg, regstr);
+            LineMatch(line, out match, regstr);
             temp.Add(line);
         }
 
@@ -211,16 +201,13 @@ namespace ShaderDecompiler
             Match match;
 
             regstr = ("^\\s*#(version|extension).*$");
-            reg = new Regex(regstr);
-            if (reg.IsMatch(line))
+            if (Regex.IsMatch(line, regstr))
                 return false;
 
             regstr = ("^\\s*void main\\(\\)$");
-            reg = new Regex(regstr);
-            if (reg.IsMatch(line))
+            if (Regex.IsMatch(line,regstr))
             {
                 regstr = ("^\\s*\\{$");
-                reg = new Regex(regstr);
 
                 line = indent(_indent);
                 if (type == "vp")
@@ -228,7 +215,7 @@ namespace ShaderDecompiler
                     line += "inter vert(app_in i)";
                     content.Add(new Line(line));
                     GetLine(_input, out line);
-                    LineMatch(line, out match, reg, regstr);
+                    LineMatch(line, out match, regstr);
                     content.Add(new Line(line));
                     line = indent(_indent);
                     line += "    inter o;";
@@ -241,7 +228,7 @@ namespace ShaderDecompiler
                     line += "target frag(inter i, bool isFrontFacing : SV_IsFrontFace)";
                     content.Add(new Line(line));
                     GetLine(_input, out line);
-                    LineMatch(line, out match, reg, regstr);
+                    LineMatch(line, out match, regstr);
                     content.Add(new Line(line));
                     line = indent(_indent);
                     line += "    target o;";
@@ -252,195 +239,153 @@ namespace ShaderDecompiler
             }
 
             regstr = ("^\\s*\\}\"$");
-            reg = new Regex(regstr);
-            if (reg.IsMatch(line))
+            if (Regex.IsMatch(line, regstr))
                 line = line.Remove(line.Length - 1, 1);
 
             regstr = ("return;");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "return o;");
+            line = Regex.Replace(line, regstr, "return o;");
 
             regstr = ("ivec(\\d)");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "int$1");
+            line = Regex.Replace(line, regstr, "int$1");
 
             regstr = ("uvec(\\d)");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "uint$1");
+            line = Regex.Replace(line, regstr, "uint$1");
 
             regstr = ("bvec(\\d)");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "bool$1");
+            line = Regex.Replace(line, regstr, "bool$1");
 
             regstr = ("(vec|mat)(\\d)");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "float$2");
+            line = Regex.Replace(line, regstr, "float$2");
 
             // Doing these both because of some nested things
             regstr = ("(float|int|uint|bool)[2-4]\\(((\\d+(\\.\\d+)?)|([^,.()]+(\\.[xyzwargb])?))\\)");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "$2");
-            line = reg.Replace(line, "$2");
+            line = Regex.Replace(line, regstr, "$2");
+            line = Regex.Replace(line, regstr, "$2");
 
             regstr = ("^.*\\sin .*$");
-            reg = new Regex(regstr);
-            if (reg.IsMatch(line))
+            if (Regex.IsMatch(line, regstr))
             {
                 ProcessSingleInput(line);
                 return false;
             }
 
             regstr = ("^.*\\sout .*$");
-            reg = new Regex(regstr);
-            if (reg.IsMatch(line))
+            if (Regex.IsMatch(line, regstr))
             {
                 ProcessSingleOutput(line);
                 return false;
             }
 
             regstr = ("^.*\\s[a-z0-9]+\\s+u_xlat.*;$");
-            reg = new Regex(regstr);
-            if (reg.IsMatch(line))
+            if (Regex.IsMatch(line, regstr))
             {
                 ProcessSingleTemp(line);
                 return false;
             }
 
             regstr = ("^.*\\suniform .*$");
-            reg = new Regex(regstr);
-            if (reg.IsMatch(line))
+            if (Regex.IsMatch(line, regstr))
             {
                 ProcessSingleGlobal(line);
                 return false;
             }
 
             regstr = (".*vs_SV_InstanceID.*");
-            reg = new Regex(regstr);
-            if (reg.IsMatch(line))
+            if (Regex.IsMatch(line, regstr))
                 return false;
 
             regstr = ("vs_[A-Za-z0-9_]+");
-            reg = new Regex(regstr);
             if (type == "vp")
-                line = reg.Replace(line, "o.$0");
+                line = Regex.Replace(line, regstr, "o.$0");
             else if (type == "fp")
-                line = reg.Replace(line, "i.$0");
+                line = Regex.Replace(line, regstr, "i.$0");
 
             regstr = ("in_[A-Za-z0-9_]+");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "i.$0");
+            line = Regex.Replace(line, regstr, "i.$0");
 
             regstr = ("SV_Target\\d");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "o.$0");
+            line = Regex.Replace(line, regstr, "o.$0");
 
             regstr = ("unity_Builtins0Array\\.unity_Builtins0Array\\.unity_([A-Za-z]+)Array\\[\\([a-zA-Z0-9_]+ \\+ (\\d)\\)\\]");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "unity_$1[$2]");
+            line = Regex.Replace(line, regstr, "unity_$1[$2]");
 
             regstr = ("unity_Builtins0Array\\.unity_Builtins0Array\\.unity_([A-Za-z]+)Array\\[[a-zA-Z0-9_]+\\]");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "unity_$1[0]");
+            line = Regex.Replace(line, regstr, "unity_$1[0]");
 
             regstr = ("unity_Builtins\\dArray\\.unity_Builtins\\dArray\\.unity_([A-Za-z]+)Array");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "unity_$1");
+            line = Regex.Replace(line, regstr, "unity_$1");
 
             regstr = ("(unity_[A-Za-z0-9_]+)\\[(\\d)\\]");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "float4($1[0][$2],$1[1][$2],$1[2][$2],$1[3][$2])");
+            line = Regex.Replace(line, regstr, "float4($1[0][$2],$1[1][$2],$1[2][$2],$1[3][$2])");
 
             regstr = ("gl_InstanceID");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "0");
+            line = Regex.Replace(line, regstr, "0");
 
             regstr = ("gl_Position");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "o.vertex");
+            line = Regex.Replace(line, regstr, "o.vertex");
 
             regstr = ("gl_FragCoord");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "i.vertex");
+            line = Regex.Replace(line, regstr, "i.vertex");
 
             regstr = ("gl_FrontFacing");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "isFrontFacing");
+            line = Regex.Replace(line, regstr, "isFrontFacing");
 
             regstr = ("equal\\(");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "(==)(");
+            line = Regex.Replace(line, regstr, "(==)(");
 
             regstr = ("greaterThan\\(");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "(>)(");
+            line = Regex.Replace(line, regstr, "(>)(");
 
             regstr = ("greaterThanEqual\\(");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "(>=)(");
+            line = Regex.Replace(line, regstr, "(>=)(");
 
             regstr = ("lessThan\\(");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "(<)(");
+            line = Regex.Replace(line, regstr, "(<)(");
 
             regstr = ("lessThanEqual\\(");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "(<=)(");
+            line = Regex.Replace(line, regstr, "(<=)(");
 
             regstr = ("\\(([<>=]=?)\\)\\(u?(?:float|int)4\\(([^,]+), ?([^,]+), ?([^,]+), ?([^,]+)\\), u?(?:float|int)4\\(([^,]+), ?([^,]+), ?([^,]+), ?([^,]+)\\)\\)");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "bool4($2 $1 $6, $3 $1 $7, $4 $1 $8, $5 $1 $9)");
+            line = Regex.Replace(line, regstr, "bool4($2 $1 $6, $3 $1 $7, $4 $1 $8, $5 $1 $9)");
 
             regstr = ("\\(([<>=]=?)\\)\\(\\(?([^,]*)\\)?, u?(?:float|int)4\\(([^,]+), ?([^,]+), ?([^,]+), ?([^,]+)\\)\\)");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "bool4(($2).x $1 $3, ($2).y $1 $4, ($2).z $1 $5, ($2).w $1 $6)");
+            line = Regex.Replace(line, regstr, "bool4(($2).x $1 $3, ($2).y $1 $4, ($2).z $1 $5, ($2).w $1 $6)");
 
             regstr = ("\\(([<>=]=?)\\)\\(u?(?:float|int)4\\(([^,]+), ?([^,]+), ?([^,]+), ?([^,]+)\\), ?\\(?([^,]*)\\)?\\)");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "bool4($2 $1 ($6).x, $3 $1 ($6).y, $4 $1 ($6).z, $5 $1 ($6).w)");
+            line = Regex.Replace(line, regstr, "bool4($2 $1 ($6).x, $3 $1 ($6).y, $4 $1 ($6).z, $5 $1 ($6).w)");
 
             regstr = ("\\(([<>=]=?)\\)\\(\\(?([^,]*)\\)?, ?([a-z0-9]*\\(?[^()]*\\)?)\\)");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "bool4(($2).x $1 ($3).x, ($2).y $1 ($3).y, ($2).z $1 ($3).z, ($2).w $1 ($3).w)");
+            line = Regex.Replace(line, regstr, "bool4(($2).x $1 ($3).x, ($2).y $1 ($3).y, ($2).z $1 ($3).z, ($2).w $1 ($3).w)");
 
             regstr = ("inversesqrt");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "rsqrt");
+            line = Regex.Replace(line, regstr, "rsqrt");
 
             regstr = ("fract");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "frac");
+            line = Regex.Replace(line, regstr, "frac");
 
             regstr = ("mix");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "lerp");
+            line = Regex.Replace(line, regstr, "lerp");
 
             regstr = ("roundEven");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "round");
+            line = Regex.Replace(line, regstr, "round");
 
             regstr = ("texture\\(");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "tex2D(");
+            line = Regex.Replace(line, regstr, "tex2D(");
 
             regstr = ("textureLod\\(([^,]+), ?([^,]+), ([^()]+)?\\)");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "tex2Dlod($1, float4($2, 0.0, $3))");
+            line = Regex.Replace(line, regstr, "tex2Dlod($1, float4($2, 0.0, $3))");
 
             regstr = ("textureLodOffset\\(([^,]+), ?([^,]+), ?([^,]+), ?((?:int2\\([^()]+\\))|(?:[^()]+))\\)");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "tex2Dlod($1, float4($2 + $4, 0.0, $3))");
+            line = Regex.Replace(line, regstr, "tex2Dlod($1, float4($2 + $4, 0.0, $3))");
 
             regstr = ("floatBitsToInt\\(");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "asint(");
+            line = Regex.Replace(line, regstr, "asint(");
 
             regstr = ("floatBitsToUint\\(");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "asuint(");
+            line = Regex.Replace(line, regstr, "asuint(");
 
             regstr = ("u?intBitsToFloat\\(");
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "asfloat(");
+            line = Regex.Replace(line, regstr, "asfloat(");
 
             return true;
         }
@@ -448,8 +393,6 @@ namespace ShaderDecompiler
         private bool ProcessVarLine(ref string line)
         {
             string regstr;
-            Regex reg;
-            Match match;
 
             /* Apparently unused variables ARE used
             regstr = ("^.* unused.*$");
@@ -460,37 +403,30 @@ namespace ShaderDecompiler
 
             // I'm not sure anymore if this is needed or not
             regstr = "^.* unity_([^P]|P[^r]|Pr[^o]|Pro[^j]).*$";
-            reg = new Regex(regstr);
-            if (reg.IsMatch(line))
+            if (Regex.IsMatch(line, regstr))
                 return false;
 
             regstr = "^.* _ZBufferParams.*$";
-            reg = new Regex(regstr);
-            if (reg.IsMatch(line))
+            if (Regex.IsMatch(line, regstr))
                 return false;
 
             regstr = "^.* _Time.*$";
-            reg = new Regex(regstr);
-            if (reg.IsMatch(line))
+            if (Regex.IsMatch(line, regstr))
                 return false;
 
             regstr = "^.* _ProjectionParams.*$";
-            reg = new Regex(regstr);
-            if (reg.IsMatch(line))
+            if (Regex.IsMatch(line, regstr))
                 return false;
 
             regstr = "^.* _ScreenParams.*$";
-            reg = new Regex(regstr);
-            if (reg.IsMatch(line))
+            if (Regex.IsMatch(line, regstr))
                 return false;
 
             regstr = "(vec|mat)(\\d)";
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "float$2");
+            line = Regex.Replace(line, regstr, "float$2");
 
             regstr = "sampler2DArray";
-            reg = new Regex(regstr);
-            line = reg.Replace(line, "sampler2D[]");
+            line = Regex.Replace(line, regstr, "sampler2D[]");
 
             return true;
         }
@@ -498,13 +434,11 @@ namespace ShaderDecompiler
         private bool ProcessBlock(ref string line)
         {
             string regstr;
-            Regex reg;
             Match match;
 
             regstr = "^\\s*layout\\([^)]*\\) uniform (.*) \\{$";
-            reg = new Regex(regstr);
 
-            match = reg.Match(line);
+            match = Regex.Match(line, regstr);
             if (match.Success)
             {
                 if (match.Groups[1].Value == "VGlobals" || match.Groups[1].Value == "PGlobals")
@@ -526,10 +460,7 @@ namespace ShaderDecompiler
             }
 
             regstr = "^\\s*struct unity_.* \\{$";
-            reg = new Regex(regstr);
-
-
-            if (reg.IsMatch(line))
+            if (Regex.IsMatch(line, regstr))
             {
                 BlockParser del = new BlockParser(_input);
                 del.Run();
