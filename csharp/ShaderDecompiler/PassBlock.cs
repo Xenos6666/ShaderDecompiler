@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace ShaderDecompiler
@@ -9,12 +10,11 @@ namespace ShaderDecompiler
     internal class PassBlock : BlockParser
     {
         private StreamReader @in;
-        private int _indent;
+        private const int _indent = 3;
 
-        public PassBlock(StreamReader @in, int indent) : base(@in, indent)
+        public PassBlock(StreamReader @in) : base(@in, _indent)
         {
             this.@in = @in;
-            this._indent = indent;
         }
 
         protected Dictionary<string, SubProgramBlock> vertSubs = new Dictionary<string, SubProgramBlock>(); 
@@ -24,51 +24,45 @@ namespace ShaderDecompiler
         protected Dictionary<string, int> vertkeywords = new Dictionary<string, int>();
         protected Dictionary<string, int> fragkeywords = new Dictionary<string, int>();
 
-        private string src_blend = string.Empty;
-        private string dst_blend = string.Empty;
-        private string cull = string.Empty;
+        private string _srcBlend = string.Empty;
+        private string _dstBlend = string.Empty;
+        private string _cull = string.Empty;
 
         public override string toString()
         {
-            string ret = "";
-            ret += base.toString();
+            var ret = base.toString();
             ret += makeProgram();
             return ret;
         }
 
-
         internal void Blend(string src_blend, string dst_blend)
         {
-            this.src_blend = src_blend;
-            this.dst_blend = dst_blend;
+            this._srcBlend = src_blend;
+            this._dstBlend = dst_blend;
         }
 
         internal void Cull(string cull)
         {
-            this.cull = cull;
+            this._cull = cull;
         }
 
+        private static readonly string _programRunRegexStr = "^\t{" + _indent + "}Program \"([a-z]+)\" \\{$";
+        private static readonly Regex _programRunRegex = new Regex(_programRunRegexStr);
+        private static readonly string _stencilRunRegexStr = "^\t{" + _indent + "}Stencil \\{$";
+        private static readonly Regex _stencilRunRegex = new Regex(_stencilRunRegexStr);
         internal string Run()
         {
-            string line = "";
-
-            var regstr = "^\t{" + _indent + "}Program \"([a-z]+)\" \\{$";
-            var reg = new Regex(regstr);
-
-            string stregstr = "^\t{" + _indent + "}Stencil \\{$";
-            Regex streg = new Regex(stregstr);
-
-            GetLine(@in, out line);
+            GetLine(@in, out var line);
             while (line.Contains('{') || !line.Contains('}'))
             {
                 if (line.Contains('{') && !line.Contains('}'))
                 {
-                    var match = reg.Match(line);
+                    var match = _programRunRegex.Match(line);
                     if (match.Success)
                     {
-                        string lastline = ProgramRoutine(match.Groups[1].Value);
+                        _ = ProgramRoutine(match.Groups[1].Value);
                     }
-                    else if (streg.IsMatch(line))
+                    else if (_stencilRunRegex.IsMatch(line))
                     {
                         content.Add(new Line(line));
                         line = StencilRoutine();
@@ -82,7 +76,9 @@ namespace ShaderDecompiler
                     }
                 }
                 else if (ProcessLine(line))
+                {
                     content.Add(new Line(line));
+                }
 
                 GetLine(@in, out line);
             }
@@ -90,42 +86,45 @@ namespace ShaderDecompiler
             return line;
         }
 
+        private static readonly string _idProcRegexStr = "^\t{" + _indent + "}GpuProgramID \\d+$";
+        private static readonly Regex _idProcRegex = new Regex(_idProcRegexStr);
+        private static readonly string _blendProcRegexStr = "^(\t{" + _indent + "}Blend) .*$";
+        private static readonly Regex _blendProcRegex = new Regex(_blendProcRegexStr);
+        private static readonly string _cullProcRegexStr = "^(\t{" + _indent + "}Cull) .*$";
+        private static readonly Regex _cullProcRegex = new Regex(_cullProcRegexStr);
         bool ProcessLine(string line)
         {
-            string regstr;
-            Regex reg;
-            Match match;
-
-            regstr = "^\t{" + _indent + "}GpuProgramID \\d+$";
-            reg = new Regex(regstr);
-
-            match = reg.Match(line);
-            if (match.Success)
+            if (_idProcRegex.IsMatch(line))
                 return false;
 
-            if (src_blend != "" && dst_blend != "")
+            if (_srcBlend != "" && _dstBlend != "")
             {
-                regstr = "^(\t{" + _indent + "}Blend) .*$";
-                reg = new Regex(regstr);
-
-                match = reg.Match(line);
-                if (match.Success)
-                    line = reg.Replace(line, "$1 [" + src_blend + "] [" + dst_blend + "], [" + src_blend + "] [" + dst_blend + "]");
+                if (_blendProcRegex.IsMatch(line))
+                {
+                    line = _blendProcRegex.Replace(line, "$1 [" + _srcBlend + "] [" + _dstBlend + "], [" + _srcBlend + "] [" + _dstBlend + "]");
+                }
             }
 
-            if (cull != "")
-            {
-                regstr = "^(\t{" + _indent + "}Cull) .*$";
-                reg = new Regex(regstr);
-
-                match = reg.Match(line);
-                if (match.Success)
-                    line = reg.Replace(line, "$1 [_Cull]");
+            if (_cull != "")
+            {;
+                if (_cullProcRegex.IsMatch(line))
+                {
+                    line = _cullProcRegex.Replace(line, "$1 [_Cull]");
+                }
             }
 
             return true;
         }
 
+
+        private static readonly string _subProgRegexStr = "^\\s*SubProgram \"\\s*([a-z0-9]+)\\s*\" \\{$";
+        private static readonly Regex _subProgRegex = new Regex(_subProgRegexStr);
+        private static readonly string _keyProgRegexStr = "^\\s*Keywords \\{ (\"[A-Z0-9_]+\" )+\\}$";
+        private static readonly Regex _keyProgRegex = new Regex(_keyProgRegexStr);
+        private static readonly string _keywordProgRegexStr = "\"([A-Z0-9_]+)\"";
+        private static readonly Regex _keywordProgRegex = new Regex(_keyProgRegexStr);
+        private static readonly string _ptypeProgRegexStr = "^\\s*\"(!!)?[a-z0-9_]+$";
+        private static readonly Regex _ptypeProgRegex = new Regex(_ptypeProgRegexStr);
         string ProgramRoutine(string programType)
         {
             if (programType != "vp" && programType != "fp")
@@ -133,25 +132,12 @@ namespace ShaderDecompiler
                 Console.Error.WriteLine($"Unsupported program type: {programType}");
                 throw new Exception("-5");
             }
-            
-            string regstr = "^\\s*SubProgram \"\\s*([a-z0-9]+)\\s*\" \\{$";
-            var reg = new Regex(regstr);
 
-            string keyregstr = "^\\s*Keywords \\{ (\"[A-Z0-9_]+\" )+\\}$";
-            Regex keyreg = new Regex(keyregstr);
-
-            string keywordregstr = "\"([A-Z0-9_]+)\""; 
-            Regex keywordreg = new Regex(keywordregstr);
-
-            string ptyperegstr = "^\\s*\"(!!)?[a-z0-9_]+$";
-            Regex ptypereg = new Regex(ptyperegstr);
-
-            Match match;
-            string line = "";
-            GetLine(@in, out line);
+            GetLine(@in, out var line);
             while (line.Contains('{') || !line.Contains('}'))
             {
-                LineMatch(line, out match, reg, regstr);
+                Match match;
+                LineMatch(line, out match, _subProgRegex, _subProgRegexStr);
                 if (match.Groups[1].Value != "d3d11")
                 {
                     Console.Error.WriteLine($"Unsupported subprogram type: {match.Groups[1].Value}");
@@ -160,11 +146,11 @@ namespace ShaderDecompiler
 
                 GetLine(@in, out line);
                 string keywords_str = " ";
-                match = keyreg.Match(line);
+                match = _keyProgRegex.Match(line);
                 if (match.Success)
                 {
-                    //possible wrong conversion
-                    match = keywordreg.Match(line);
+                    //possible wrong conversion expect to refactor this
+                    match = _keywordProgRegex.Match(line);
                     while (match.Success)
                     {
                         keywords_str += match.Groups[1].Value;
@@ -183,7 +169,7 @@ namespace ShaderDecompiler
                     GetLine(@in, out line);
                 }
 
-                LineMatch(line, out match, ptypereg, ptyperegstr);
+                LineMatch(line, out match, _ptypeProgRegex, _ptypeProgRegexStr);
 
                 if (keywords_vars.ContainsKey(keywords_str))
                     keywords_vars.Add(keywords_str,0);
@@ -200,17 +186,14 @@ namespace ShaderDecompiler
             return line;
         }
 
+        private static readonly string _compStenRegexStr = "^(\\s*Comp) Disabled$";
+        private static readonly Regex _compStenRegex = new Regex(_compStenRegexStr);
         string StencilRoutine()
         {
-            string compregstr = "^(\\s*Comp) Disabled$";
-            Regex compreg = new Regex(compregstr);
-
-            Match match;
-            string line = "";
-            GetLine(@in, out line);
+            GetLine(@in, out var line);
             while (line.Contains('{') || !line.Contains('}'))
             {
-                match = compreg.Match(line);
+                var match = _compStenRegex.Match(line);
                 if (match.Success)
                 {
                     line = match.Groups[1].Value;
@@ -237,11 +220,11 @@ namespace ShaderDecompiler
 
         string makeProgram()
         {
-            string ret = "";
-            ret += indent(_indent) + "CGPROGRAM\n\n";
-            ret += "#include \"UnityCG.cginc\"\n\n";
-            ret += "#pragma vertex vert\n";
-            ret += "#pragma fragment frag\n\n";
+            StringBuilder ret = new StringBuilder("");
+            ret.Append((_indent) + "CGPROGRAM\n\n");
+            ret.Append("#include \"UnityCG.cginc\"\n\n");
+            ret.Append("#pragma vertex vert\n");
+            ret.Append("#pragma fragment frag\n\n");
 
             Dictionary<string,int> keywords_cpy = new Dictionary<string, int>(keywords);
             List<Dictionary<string, int>> variants = new List<Dictionary<string, int>>();
@@ -265,7 +248,6 @@ namespace ShaderDecompiler
                             }
                         }
                     }
-
 
                     //something is broken here
                     foreach (var prog in keywords_vars)
@@ -296,34 +278,34 @@ namespace ShaderDecompiler
                 }
 
 
-                ret += "#pragma multi_compile_local";
+                ret.Append("#pragma multi_compile_local");
 		        foreach (var vart in prag)
 		        {
-			        ret += " ";
-			        ret += vart.Key;
+			        ret.Append(" ");
+			        ret.Append(vart.Key);
 		        }
-		        ret += "\n";
+		        ret.Append("\n");
             }
 
 	        foreach (var vert in vertSubs)
 	        {
-		        ret += "\n#if 1";
+		        ret.Append("\n#if 1");
 		        string keys = vert.Key;
 		        foreach (var key in vertkeywords)
                 {
 			        if (!keys.Contains(" " + key.Key + " "))
-				        ret += " && !defined (" + key.Key + ")";
+				        ret.Append(" && !defined (" + key.Key + ")");
 			        else
-				        ret += " && defined (" + key.Key + ")";
+				        ret.Append(" && defined (" + key.Key + ")");
 		        }
-		        ret += "\n\n";
-		        ret += vert.Value.toString();
-                ret += "\n#endif\n";
+		        ret.Append("\n\n");
+		        ret.Append(vert.Value.toString());
+                ret.Append("\n#endif\n");
             }
 
 	        foreach (var frag in fragSibs)
 	        {
-		        ret += "\n#if 1";
+		        ret.Append("\n#if 1");
 		        string keys = frag.Key;
                 var vert = vertSubs.ContainsKey(keys);
                 if (vert)
@@ -331,30 +313,30 @@ namespace ShaderDecompiler
 			        foreach (var key in fragkeywords)
 			        {
 				        if (!keys.Contains(" " + key.Key + " "))
-					        ret += " && !defined (" + key.Key + ")";
+					        ret.Append(" && !defined (" + key.Key + ")");
 				        else
-					        ret += " && defined (" + key.Key + ")";
+					        ret.Append(" && defined (" + key.Key + ")");
 			        }
-			        ret += "\n\n";
-			        ret += frag.Value.toString(vertSubs[keys].GetDeclaredUniforms());
-                    ret += "\n#endif\n";
+			        ret.Append("\n\n");
+			        ret.Append(frag.Value.toString(vertSubs[keys].GetDeclaredUniforms()));
+                    ret.Append("\n#endif\n");
 		        }
 		        else
 		        {
 			        foreach (var key in fragkeywords)
 			        {
 				        if (!keys.Contains(" " + key.Key + " "))
-					        ret += " && !defined (" + key.Key + ")";
+					        ret.Append(" && !defined (" + key.Key + ")");
 				        else
-					        ret += " && defined (" + key.Key + ")";
+					        ret.Append(" && defined (" + key.Key + ")");
 			        }
-			        ret += "\n\n";
-			        ret += frag.Value.toString();
-                    ret += "\n#endif\n";
+			        ret.Append("\n\n");
+			        ret.Append(frag.Value.toString());
+                    ret.Append("\n#endif\n");
 		        }
 	        }
-            ret += indent(_indent) + "ENDCG\n";
-	        return ret;
+            ret.Append(indent(_indent) + "ENDCG\n");
+	        return ret.ToString();
         }
     }
 }

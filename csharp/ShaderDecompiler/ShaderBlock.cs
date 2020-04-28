@@ -9,9 +9,9 @@ namespace ShaderDecompiler
         private StreamReader _in;
 		const int _indent = 1;
 
-        string src_blend = string.Empty;
-        string dst_blend = string.Empty;
-        string cull = string.Empty;
+        string _srcBlend = string.Empty;
+        string _dstBlend = string.Empty;
+        string _cull = string.Empty;
 
 		public ShaderBlock(StreamReader _in) : base(_in, _indent)
         {
@@ -62,7 +62,7 @@ namespace ShaderDecompiler
 
         private static readonly string _passSubRegexStr = "^\t{" + (_indent + 1) + "}Pass \\{$";
 		private static readonly Regex _passSubRegex = new Regex(_passSubRegexStr);
-        private static readonly string _grabSubRegexStr = "^\t{" + (_indent + 1).ToString() + "}GrabPass \\{$";
+        private static readonly string _grabSubRegexStr = "^\t{" + (_indent + 1) + "}GrabPass \\{$";
 		private static readonly Regex _grabSubRegex = new Regex(_grabSubRegexStr);
 
 		string SubShaderRoutine()
@@ -74,9 +74,9 @@ namespace ShaderDecompiler
 
 				if (_passSubRegex.IsMatch(line))
 				{
-					PassBlock newBlock = new PassBlock(_in, _indent + 2);
-					newBlock.Blend(src_blend, dst_blend);
-					newBlock.Cull(cull);
+					PassBlock newBlock = new PassBlock(_in);
+					newBlock.Blend(_srcBlend, _dstBlend);
+					newBlock.Cull(_cull);
 					line = newBlock.Run();
 					content.Add(newBlock);
 					content.Add(new Line(line));
@@ -111,11 +111,11 @@ namespace ShaderDecompiler
                 if (match.Success)
                 {
                     if (match.Groups[1].Value.Contains("SrcBlend"))
-                        src_blend = match.Groups[1].Value;
+                        _srcBlend = match.Groups[1].Value;
                     if (match.Groups[1].Value.Contains("DstBlend"))
-                        dst_blend = match.Groups[1].Value;
+                        _dstBlend = match.Groups[1].Value;
                     if (match.Groups[1].Value == "_Cull")
-                        cull = match.Groups[1].Value;
+                        _cull = match.Groups[1].Value;
                 }
 
                 GetLine(_in, out line);
