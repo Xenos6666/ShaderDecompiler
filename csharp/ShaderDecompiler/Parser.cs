@@ -12,30 +12,21 @@ namespace ShaderDecompiler
             _input = input;
         }
 
+        private static Regex empty = new Regex("^\\s*$");
         public void GetLine(StreamReader input, out string output)
         {
-            Regex empty = new Regex("^\\s*$");
             output = "";
             while (empty.IsMatch(output))
             {
-                //if (input.EndOfStream)
-                //{
-                //    throw new EndOfStreamException();
-                //}
                 output = input.ReadLine();
             }
         }
 
         public void LastLine(StreamReader input)
         {
-            Regex empty = new Regex("^\\s*$");
             string output = "";
             while (empty.IsMatch(output))
             {
-                if (input.EndOfStream)
-                {
-                    throw new EndOfStreamException();
-                }
                 output = input.ReadLine();
             }
         }
