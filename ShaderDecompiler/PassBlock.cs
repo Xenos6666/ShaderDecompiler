@@ -18,7 +18,7 @@ namespace ShaderDecompiler
         }
 
         protected Dictionary<string, SubProgramBlock> vertSubs = new Dictionary<string, SubProgramBlock>(); 
-        protected Dictionary<string, SubProgramBlock> fragSibs = new Dictionary<string, SubProgramBlock>();
+        protected Dictionary<string, SubProgramBlock> fragSubs = new Dictionary<string, SubProgramBlock>();
         protected Dictionary<string, int> keywords_vars = new Dictionary<string, int>();
         protected Dictionary<string, int> keywords = new Dictionary<string, int>();
         protected Dictionary<string, int> vertkeywords = new Dictionary<string, int>();
@@ -171,13 +171,13 @@ namespace ShaderDecompiler
 
                 LineMatch(line, out match, _ptypeProgRegex, _ptypeProgRegexStr);
 
-                if (keywords_vars.ContainsKey(keywords_str))
+                if (!keywords_vars.ContainsKey(keywords_str))
                     keywords_vars.Add(keywords_str, 0);
                 SubProgramBlock subprogram = new SubProgramBlock(@in, programType, _indent + 2);
                 if (programType == "vp")
                     vertSubs.Add(keywords_str, subprogram);
                 else if (programType == "fp")
-                    fragSibs.Add(keywords_str, subprogram);
+                    fragSubs.Add(keywords_str, subprogram);
                 line = subprogram.Run();
 
                 GetLine(@in, out line);
@@ -221,19 +221,19 @@ namespace ShaderDecompiler
         string makeProgram()
         {
             StringBuilder ret = new StringBuilder("");
-            ret.Append((_indent) + "CGPROGRAM\n\n");
+            ret.Append(indent(_indent) + "CGPROGRAM\n\n");
             ret.Append("#include \"UnityCG.cginc\"\n\n");
             ret.Append("#pragma vertex vert\n");
             ret.Append("#pragma fragment frag\n\n");
 
-            Dictionary<string,int> keywords_cpy = new Dictionary<string, int>(keywords);
+            Dictionary<string,int> used_keywords = new Dictionary<string, int>();
             List<Dictionary<string, int>> variants = new List<Dictionary<string, int>>();
-            foreach (var obj in keywords_cpy)
+            foreach (var obj in keywords)
             {
-                if (obj.Value == 0)
+                if (!used_keywords.ContainsKey(obj.Key))
                 {
                     /* Probably stupid and doesn't work on some edge-cases */ //from original code
-                    Dictionary<string, int> alts = new Dictionary<string, int>(keywords_cpy);
+                    Dictionary<string, int> alts = new Dictionary<string, int>(keywords);
                     foreach (var prog in keywords_vars)
                     {
                         Dictionary<string, int> tmp = new Dictionary<string, int>(alts);
@@ -249,7 +249,6 @@ namespace ShaderDecompiler
                         }
                     }
 
-                    //something is broken here
                     foreach (var prog in keywords_vars)
                     {
                         foreach (var alt in alts)
@@ -262,81 +261,78 @@ namespace ShaderDecompiler
 
                         alts.Add("__", 0);
                         break;
-                    outofloop:
+outofloop:
                         continue;
                     }
 
+                    foreach (var alt in alts)
+                        if (!used_keywords.ContainsKey(alt.Key))
+                            used_keywords[alt.Key] = 1;
                     variants.Add(alts);
                 }
             }
 
-	        foreach (var prag in variants)
-	        {
-                foreach (var alt in prag)
-                {
-                    keywords_cpy[alt.Key] = 1;
-                }
-
-
+            foreach (var prag in variants)
+            {
                 ret.Append("#pragma multi_compile_local");
-		        foreach (var vart in prag)
-		        {
-			        ret.Append(" ");
-			        ret.Append(vart.Key);
-		        }
-		        ret.Append("\n");
+                foreach (var vart in prag)
+                {
+                    ret.Append(" ");
+                    ret.Append(vart.Key);
+                }
+                ret.Append("\n");
             }
 
-	        foreach (var vert in vertSubs)
-	        {
-		        ret.Append("\n#if 1");
-		        string keys = vert.Key;
-		        foreach (var key in vertkeywords)
+            foreach (var vert in vertSubs)
+            {
+                ret.Append("\n#if 1");
+                string keys = vert.Key;
+                foreach (var key in vertkeywords)
                 {
-			        if (!keys.Contains(" " + key.Key + " "))
-				        ret.Append(" && !defined (" + key.Key + ")");
-			        else
-				        ret.Append(" && defined (" + key.Key + ")");
-		        }
-		        ret.Append("\n\n");
-		        ret.Append(vert.Value.toString());
+                    if (!keys.Contains(" " + key.Key + " "))
+                        ret.Append(" && !defined (" + key.Key + ")");
+                    else
+                        ret.Append(" && defined (" + key.Key + ")");
+                }
+                ret.Append("\n\n");
+                ret.Append(vert.Value.toString());
                 ret.Append("\n#endif\n");
             }
 
-	        foreach (var frag in fragSibs)
-	        {
-		        ret.Append("\n#if 1");
-		        string keys = frag.Key;
+            foreach (var frag in fragSubs)
+            {
+                ret.Append("\n#if 1");
+                string keys = frag.Key;
                 var vert = vertSubs.ContainsKey(keys);
                 if (vert)
-		        {
-			        foreach (var key in fragkeywords)
-			        {
-				        if (!keys.Contains(" " + key.Key + " "))
-					        ret.Append(" && !defined (" + key.Key + ")");
-				        else
-					        ret.Append(" && defined (" + key.Key + ")");
-			        }
-			        ret.Append("\n\n");
-			        ret.Append(frag.Value.toString(vertSubs[keys].GetDeclaredUniforms()));
+                {
+                    foreach (var key in fragkeywords)
+                    {
+                        if (!keys.Contains(" " + key.Key + " "))
+                            ret.Append(" && !defined (" + key.Key + ")");
+                        else
+                            ret.Append(" && defined (" + key.Key + ")");
+                    }
+                    ret.Append("\n\n");
+                    ret.Append(frag.Value.toString(vertSubs[keys].GetDeclaredUniforms()));
                     ret.Append("\n#endif\n");
-		        }
-		        else
-		        {
-			        foreach (var key in fragkeywords)
-			        {
-				        if (!keys.Contains(" " + key.Key + " "))
-					        ret.Append(" && !defined (" + key.Key + ")");
-				        else
-					        ret.Append(" && defined (" + key.Key + ")");
-			        }
-			        ret.Append("\n\n");
-			        ret.Append(frag.Value.toString());
+                }
+                else
+                {
+                    foreach (var key in fragkeywords)
+                    {
+                        if (!keys.Contains(" " + key.Key + " "))
+                            ret.Append(" && !defined (" + key.Key + ")");
+                        else
+                            ret.Append(" && defined (" + key.Key + ")");
+                    }
+                    ret.Append("\n\n");
+                    ret.Append(frag.Value.toString());
                     ret.Append("\n#endif\n");
-		        }
-	        }
+                }
+            }
             ret.Append(indent(_indent) + "ENDCG\n");
-	        return ret.ToString();
+            return ret.ToString();
         }
     }
 }

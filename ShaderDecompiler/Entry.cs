@@ -72,7 +72,6 @@ namespace ShaderDecompiler
             test.Stop();
             Console.WriteLine(test.ElapsedMilliseconds);
 #endif
-            Console.ReadLine();
         }
 
         private static void ShaderProcess(string input, string output)

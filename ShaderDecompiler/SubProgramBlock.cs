@@ -149,7 +149,7 @@ namespace ShaderDecompiler
         }
 
         private static readonly string _procSingleInRegexStr =
-            "^\\s*(layout\\(location = \\d\\)\\s+)?(in\\s+)([a-zA-Z0-9_]+\\s+(in_|vs_)(POSITION|NORMAL|[a-zA-Z0-9_]+)\\d*);$";
+            "^\\s*(layout\\(location = \\d\\)\\s+)?((?:flat )?in\\s+)([a-zA-Z0-9_]+\\s+(in_|vs_)(POSITION|NORMAL|[a-zA-Z0-9_]+)\\d*);$";
         private static readonly Regex _procSingleInRegex = new Regex(_procSingleInRegexStr);
         protected void ProcessSingleInput(string line)
         {
@@ -165,7 +165,6 @@ namespace ShaderDecompiler
         protected void ProcessSingleOutput(string line)
         {
             string regstr;
-            Regex reg;
             Match match;
 
             regstr = "^(\\s*)(flat out\\s+)([a-z0-9_]+\\s+vs_SV_InstanceID\\d*);$";
@@ -185,7 +184,6 @@ namespace ShaderDecompiler
         protected void ProcessSingleTemp(string line)
         {
             string regstr;
-            Regex reg;
             Match match;
 
             regstr = "^(\\s*)[a-z0-9_]+\\s+u_xlat[a-z0-9_]*;$";
@@ -197,7 +195,6 @@ namespace ShaderDecompiler
         private bool ProcessLine(ref string line)
         {
             string regstr;
-            Regex reg;
             Match match;
 
             regstr = ("^\\s*#(version|extension).*$");
