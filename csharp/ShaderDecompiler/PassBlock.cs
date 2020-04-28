@@ -75,7 +75,7 @@ namespace ShaderDecompiler
                         content.Add(new Line(line));
                     }
                 }
-                else if (ProcessLine(line))
+                else if (ProcessLine(ref line))
                 {
                     content.Add(new Line(line));
                 }
@@ -92,7 +92,7 @@ namespace ShaderDecompiler
         private static readonly Regex _blendProcRegex = new Regex(_blendProcRegexStr);
         private static readonly string _cullProcRegexStr = "^(\t{" + _indent + "}Cull) .*$";
         private static readonly Regex _cullProcRegex = new Regex(_cullProcRegexStr);
-        bool ProcessLine(string line)
+        bool ProcessLine(ref string line)
         {
             if (_idProcRegex.IsMatch(line))
                 return false;
@@ -106,7 +106,7 @@ namespace ShaderDecompiler
             }
 
             if (_cull != "")
-            {;
+            {
                 if (_cullProcRegex.IsMatch(line))
                 {
                     line = _cullProcRegex.Replace(line, "$1 [_Cull]");
@@ -122,7 +122,7 @@ namespace ShaderDecompiler
         private static readonly string _keyProgRegexStr = "^\\s*Keywords \\{ (\"[A-Z0-9_]+\" )+\\}$";
         private static readonly Regex _keyProgRegex = new Regex(_keyProgRegexStr);
         private static readonly string _keywordProgRegexStr = "\"([A-Z0-9_]+)\"";
-        private static readonly Regex _keywordProgRegex = new Regex(_keyProgRegexStr);
+        private static readonly Regex _keywordProgRegex = new Regex(_keywordProgRegexStr);
         private static readonly string _ptypeProgRegexStr = "^\\s*\"(!!)?[a-z0-9_]+$";
         private static readonly Regex _ptypeProgRegex = new Regex(_ptypeProgRegexStr);
         string ProgramRoutine(string programType)
@@ -137,7 +137,7 @@ namespace ShaderDecompiler
             while (line.Contains('{') || !line.Contains('}'))
             {
                 Match match;
-                LineMatch(line, out match, _subProgRegex, _subProgRegexStr);
+                LineMatch(line, out match, _subProgRegexStr);
                 if (match.Groups[1].Value != "d3d11")
                 {
                     Console.Error.WriteLine($"Unsupported subprogram type: {match.Groups[1].Value}");
@@ -172,7 +172,7 @@ namespace ShaderDecompiler
                 LineMatch(line, out match, _ptypeProgRegex, _ptypeProgRegexStr);
 
                 if (keywords_vars.ContainsKey(keywords_str))
-                    keywords_vars.Add(keywords_str,0);
+                    keywords_vars.Add(keywords_str, 0);
                 SubProgramBlock subprogram = new SubProgramBlock(@in, programType, _indent + 2);
                 if (programType == "vp")
                     vertSubs.Add(keywords_str, subprogram);
