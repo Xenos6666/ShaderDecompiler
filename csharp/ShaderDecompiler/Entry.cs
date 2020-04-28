@@ -29,14 +29,13 @@ namespace ShaderDecompiler
         {
             File shaderFile = new File(input);
 
-            var outFile = System.IO.File.Create(output);
-
-            using (StreamWriter stream = new StreamWriter(outFile))
+            using (var outFile = System.IO.File.Create(output))
             {
-                shaderFile.Write(stream);
+                using (StreamWriter stream = new StreamWriter(outFile))
+                {
+                    shaderFile.Write(stream);
+                }
             }
-
-            outFile.Close();
         }
     }
 }
