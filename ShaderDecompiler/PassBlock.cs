@@ -19,10 +19,9 @@ namespace ShaderDecompiler
 
         protected Dictionary<string, SubProgramBlock> vertSubs = new Dictionary<string, SubProgramBlock>(); 
         protected Dictionary<string, SubProgramBlock> fragSubs = new Dictionary<string, SubProgramBlock>();
-        protected Dictionary<string, int> keywords_vars = new Dictionary<string, int>();
-        protected Dictionary<string, int> keywords = new Dictionary<string, int>();
-        protected Dictionary<string, int> vertkeywords = new Dictionary<string, int>();
-        protected Dictionary<string, int> fragkeywords = new Dictionary<string, int>();
+        protected List<string> keywords = new List<string>();
+        protected List<string> vertkeywords = new List<string>();
+        protected List<string> fragkeywords = new List<string>();
 
         private string _srcBlend = string.Empty;
         private string _dstBlend = string.Empty;
@@ -155,13 +154,15 @@ namespace ShaderDecompiler
                     {
                         keywords_str += match.Groups[1].Value;
                         keywords_str += " ";
-                        if (!keywords.ContainsKey(match.Groups[1].Value))
-                            keywords.Add(match.Groups[1].Value,0);
-                        if (programType == "vp" && !vertkeywords.ContainsKey(match.Groups[1].Value))
-                            vertkeywords.Add(match.Groups[1].Value,0);
 
-                        else if (programType == "fp" && !fragkeywords.ContainsKey(match.Groups[1].Value))
-                            fragkeywords.Add(match.Groups[1].Value,0);
+                        if (!keywords.Contains(match.Groups[1].Value))
+                            keywords.Add(match.Groups[1].Value);
+
+                        if (programType == "vp" && !vertkeywords.Contains(match.Groups[1].Value))
+                            vertkeywords.Add(match.Groups[1].Value);
+                        else if (programType == "fp" && !fragkeywords.Contains(match.Groups[1].Value))
+                            fragkeywords.Add(match.Groups[1].Value);
+
                         line = match.Groups[match.Groups.Count - 1].Value;
                         match = match.NextMatch();
                     }
@@ -171,8 +172,6 @@ namespace ShaderDecompiler
 
                 LineMatch(line, out match, _ptypeProgRegex, _ptypeProgRegexStr);
 
-                if (!keywords_vars.ContainsKey(keywords_str))
-                    keywords_vars.Add(keywords_str, 0);
                 SubProgramBlock subprogram = new SubProgramBlock(@in, programType, _indent + 2);
                 if (programType == "vp")
                     vertSubs.Add(keywords_str, subprogram);
@@ -226,73 +225,128 @@ namespace ShaderDecompiler
             ret.Append("#pragma vertex vert\n");
             ret.Append("#pragma fragment frag\n\n");
 
-            Dictionary<string,int> used_keywords = new Dictionary<string, int>();
-            List<Dictionary<string, int>> variants = new List<Dictionary<string, int>>();
-            foreach (var obj in keywords)
+            List<string> used_keywords = new List<string>();
+            List<KeyValuePair<List<string>,List<string>>> variants = new List<KeyValuePair<List<string>,List<string>>>();
+            foreach (string currentKeyword in keywords)
             {
-                if (!used_keywords.ContainsKey(obj.Key))
+                if (!used_keywords.Contains(currentKeyword))
                 {
-                    /* Probably stupid and doesn't work on some edge-cases */ //from original code
-                    Dictionary<string, int> alts = new Dictionary<string, int>(keywords);
-                    foreach (var prog in keywords_vars)
+                    List<string> alts = new List<string>(keywords);
+                    if (vertkeywords.Contains(currentKeyword))
                     {
-                        Dictionary<string, int> tmp = new Dictionary<string, int>(alts);
-                        if (prog.Key.Contains(obj.Key))
+                        foreach (var prog in vertSubs)
                         {
-                            foreach (var alt in tmp)
+                            var variantKeywords = prog.Key;
+                            List<string> tmp = new List<string>(alts);
+                            if (variantKeywords.Contains(" " + currentKeyword + " "))
+                                foreach (string alt in tmp)
+                                    if (alt != currentKeyword && variantKeywords.Contains(" " + alt + " "))
+                                        alts.Remove(alt);
+                        }
+
+                        foreach (var prog in vertSubs)
+                        {
+                            var variantKeywords = prog.Key;
+                            bool off = true;
+                            foreach (var alt in alts)
                             {
-                                if (alt.Key != obj.Key && prog.Key.Contains(" " + alt.Key + " "))
+                                if (variantKeywords.Contains(" " + alt + " "))
                                 {
-                                    alts.Remove(alt.Key);
+                                    off = false;
+                                    break ;
                                 }
                             }
+
+                            if (!off)
+                                continue ;
+
+                            alts.Add("__");
+                            break;
                         }
                     }
 
-                    foreach (var prog in keywords_vars)
+                    if (fragkeywords.Contains(currentKeyword))
                     {
-                        foreach (var alt in alts)
+                        foreach (var prog in fragSubs)
                         {
-                            if (prog.Key.Contains(" " + alt.Key + " "))
+                            var variantKeywords = prog.Key;
+                            List<string> tmp = new List<string>(alts);
+                            if (variantKeywords.Contains(" " + currentKeyword + " "))
+                                foreach (string alt in tmp)
+                                    if (alt != currentKeyword && variantKeywords.Contains(" " + alt + " "))
+                                        alts.Remove(alt);
+                        }
+
+                        if (!alts.Contains("__"))
+                        {
+                            foreach (var prog in fragSubs)
                             {
-                                goto outofloop;
+                                var variantKeywords = prog.Key;
+                                bool off = true;
+                                foreach (var alt in alts)
+                                {
+                                    if (variantKeywords.Contains(" " + alt + " "))
+                                    {
+                                        off = false;
+                                        break ;
+                                    }
+                                }
+
+                                if (!off)
+                                    continue ;
+
+                                alts.Add("__");
+                                break;
                             }
                         }
-
-                        alts.Add("__", 0);
-                        break;
-outofloop:
-                        continue;
                     }
 
-                    foreach (var alt in alts)
-                        if (!used_keywords.ContainsKey(alt.Key))
-                            used_keywords[alt.Key] = 1;
-                    variants.Add(alts);
+                    List<string> tmp2 = new List<string>(alts);
+                    List<string> conditions = new List<string>();
+                    foreach (string alt in tmp2)
+                    {
+                        if (alt != "__")
+                        {
+                            if (!used_keywords.Contains(alt))
+                                used_keywords.Add(alt);
+                            else
+                            {
+                                alts.Remove(alt);
+                                conditions.Add(alt);
+                            }
+                        }
+                    }
+                    variants.Add(new KeyValuePair<List<string>,List<string>>(conditions, alts));
                 }
             }
 
             foreach (var prag in variants)
             {
-                ret.Append("#pragma multi_compile");
-                foreach (var vart in prag)
+                if (prag.Key.Count > 0)
                 {
-                    ret.Append(" ");
-                    ret.Append(vart.Key);
+                    ret.Append("#if 1");
+                    foreach (var condition in prag.Key)
+                        ret.Append(" && !defined (" + condition + ")");
+                    ret.Append("\n");
                 }
+                ret.Append("#pragma multi_compile");
+                foreach (var key in prag.Value)
+                    ret.Append(" " + key);
                 ret.Append("\n");
+                if (prag.Key.Count > 0)
+                    ret.Append("#endif\n");
             }
 
             foreach (var vert in vertSubs)
             {
                 ret.Append("\n#if 1");
                 string keys = vert.Key;
-                foreach (var key in vertkeywords)
+                foreach (string key in vertkeywords)
                 {
-                    if (!keys.Contains(" " + key.Key + " "))
-                        ret.Append(" && !defined (" + key.Key + ")");
+                    if (!keys.Contains(" " + key + " "))
+                        ret.Append(" && !defined (" + key + ")");
                     else
-                        ret.Append(" && defined (" + key.Key + ")");
+                        ret.Append(" && defined (" + key + ")");
                 }
                 ret.Append("\n\n");
                 ret.Append(vert.Value.toString());
@@ -306,12 +360,12 @@ outofloop:
                 var vert = vertSubs.ContainsKey(keys);
                 if (vert)
                 {
-                    foreach (var key in fragkeywords)
+                    foreach (string key in fragkeywords)
                     {
-                        if (!keys.Contains(" " + key.Key + " "))
-                            ret.Append(" && !defined (" + key.Key + ")");
+                        if (!keys.Contains(" " + key + " "))
+                            ret.Append(" && !defined (" + key + ")");
                         else
-                            ret.Append(" && defined (" + key.Key + ")");
+                            ret.Append(" && defined (" + key + ")");
                     }
                     ret.Append("\n\n");
                     ret.Append(frag.Value.toString(vertSubs[keys].GetDeclaredUniforms()));
@@ -319,12 +373,12 @@ outofloop:
                 }
                 else
                 {
-                    foreach (var key in fragkeywords)
+                    foreach (string key in fragkeywords)
                     {
-                        if (!keys.Contains(" " + key.Key + " "))
-                            ret.Append(" && !defined (" + key.Key + ")");
+                        if (!keys.Contains(" " + key + " "))
+                            ret.Append(" && !defined (" + key + ")");
                         else
-                            ret.Append(" && defined (" + key.Key + ")");
+                            ret.Append(" && defined (" + key + ")");
                     }
                     ret.Append("\n\n");
                     ret.Append(frag.Value.toString());
