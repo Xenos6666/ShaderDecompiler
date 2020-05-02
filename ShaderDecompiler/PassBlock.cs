@@ -274,7 +274,7 @@ outofloop:
 
             foreach (var prag in variants)
             {
-                ret.Append("#pragma multi_compile_local");
+                ret.Append("#pragma multi_compile");
                 foreach (var vart in prag)
                 {
                     ret.Append(" ");
