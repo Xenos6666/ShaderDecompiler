@@ -366,6 +366,9 @@ namespace ShaderDecompiler
             regstr = ("roundEven");
             line = Regex.Replace(line, regstr, "round");
 
+            regstr = ("texture\\(([^,]+), ?([^,]+), ([^()]+)?\\)");
+            line = Regex.Replace(line, regstr, "tex2Dbias($1, float4($2, 0.0, $3))");
+
             regstr = ("texture\\(");
             line = Regex.Replace(line, regstr, "tex2D(");
 
